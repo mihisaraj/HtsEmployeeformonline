@@ -1,19 +1,55 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { PublicClientApplication, type AccountInfo } from "@azure/msal-browser";
 import { AnimatePresence, motion } from "framer-motion";
 
+type Nominee = {
+  id: string;
+  name: string;
+  passportId: string;
+  relationship: string;
+  portion: string;
+};
+
 type FormState = {
-  firstName: string;
-  lastName: string;
-  jobTitle: string;
-  department: string;
-  startDate: string;
-  manager: string;
-  location: string;
-  equipment: string;
-  notes: string;
+  passportName: string;
+  callingName: string;
+  gender: string;
+  dobDay: string;
+  dobMonth: string;
+  dobYear: string;
+  nationality: string;
+  religion: string;
+  passportNo: string;
+  maritalStatus: string;
+  contactNumber: string;
+  homeCountry: string;
+  personalEmail: string;
+  residentialAddress: string;
+  emergencyName: string;
+  emergencyRelationship: string;
+  emergencyContact: string;
+  emergencyAddress: string;
+  birthPlace: string;
+  spouseName: string;
+  motherName: string;
+  fatherName: string;
+  nominees: Nominee[];
+};
+
+type FieldKey = keyof Omit<FormState, "nominees">;
+type NomineeField = "name" | "passportId" | "relationship" | "portion";
+
+type ValidationErrors = {
+  fields: Partial<Record<FieldKey, string>>;
+  nominees: Record<string, Partial<Record<NomineeField, string>>>;
+  global?: string;
 };
 
 type StatusState = {
@@ -21,23 +57,61 @@ type StatusState = {
   message: string;
 };
 
-const defaultForm: FormState = {
-  firstName: "",
-  lastName: "",
-  jobTitle: "",
-  department: "",
-  startDate: "",
-  manager: "",
-  location: "",
-  equipment: "Standard laptop + Office 365",
-  notes: "",
-};
+const GENDER_OPTIONS = ["Male", "Female", "Non-binary", "Prefer not to say"];
+const MARITAL_STATUS_OPTIONS = ["Single", "Married", "Widowed", "Divorced"];
+const RELATIONSHIP_OPTIONS = [
+  "Spouse",
+  "Child",
+  "Parent",
+  "Sibling",
+  "Relative",
+  "Friend",
+  "Other",
+];
+const HOME_COUNTRY_OPTIONS = ["Sri Lanka", "India", "Malaysia", "Singapore"];
+
+let nomineeIdCounter = 0;
+
+const createNominee = (): Nominee => ({
+  id: `nominee-${Date.now()}-${nomineeIdCounter++}`,
+  name: "",
+  passportId: "",
+  relationship: "",
+  portion: "",
+});
+
+const buildDefaultForm = (): FormState => ({
+  passportName: "",
+  callingName: "",
+  gender: "",
+  dobDay: "",
+  dobMonth: "",
+  dobYear: "",
+  nationality: "",
+  religion: "",
+  passportNo: "",
+  maritalStatus: "",
+  contactNumber: "",
+  homeCountry: "Sri Lanka",
+  personalEmail: "",
+  residentialAddress: "",
+  emergencyName: "",
+  emergencyRelationship: "",
+  emergencyContact: "",
+  emergencyAddress: "",
+  birthPlace: "",
+  spouseName: "",
+  motherName: "",
+  fatherName: "",
+  nominees: [createNominee()],
+});
 
 const msalClientId = process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
 const msalTenantId = process.env.NEXT_PUBLIC_AZURE_TENANT_ID;
 const msalRedirectUri =
   process.env.NEXT_PUBLIC_AZURE_REDIRECT_URI ?? "http://localhost:3000";
 const LOGIN_SCOPES: string[] = ["User.Read", "Mail.Send"];
+const ALLOWED_DOMAIN = "@hts.asia";
 
 export default function Home() {
   const [msalInstance, setMsalInstance] = useState<
@@ -48,19 +122,20 @@ export default function Home() {
     {}
   );
   const [mailToken, setMailToken] = useState<string | null>(null);
-  const [formData, setFormData] = useState<FormState>(defaultForm);
+  const [formData, setFormData] = useState<FormState>(() => buildDefaultForm());
+  const [errors, setErrors] = useState<ValidationErrors>({
+    fields: {},
+    nominees: {},
+  });
   const [status, setStatus] = useState<StatusState>({
     type: "info",
-    message: "Welcome—sign in with your HTS Microsoft account to begin.",
+    message: "Welcome - sign in with your HTS Microsoft account to begin.",
   });
   const [authLoading, setAuthLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  const canAuth = useMemo(
-    () => Boolean(msalClientId && msalTenantId),
-    []
-  );
+  const canAuth = Boolean(msalClientId && msalTenantId);
 
   const hydrateProfile = useCallback(
     async (instance: PublicClientApplication, nextAccount: AccountInfo) => {
@@ -148,6 +223,16 @@ export default function Home() {
         result?.account ?? instance.getActiveAccount() ?? null;
 
       if (activeAccount) {
+        const email = (activeAccount.username ?? "").toLowerCase();
+        if (!email.endsWith(ALLOWED_DOMAIN)) {
+          setStatus({
+            type: "error",
+            message:
+              "Only @hts.asia accounts can sign in here. Please use your HTS address.",
+          });
+          return;
+        }
+
         instance.setActiveAccount(activeAccount);
         setAccount(activeAccount);
         hydrateProfile(instance, activeAccount);
@@ -191,11 +276,69 @@ export default function Home() {
     }
   };
 
-  const handleInputChange = (
-    key: keyof FormState,
+  const handleFieldChange = (key: FieldKey, value: string) => {
+    setFormData((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => {
+      if (!prev.fields[key] && !prev.global) {
+        return prev;
+      }
+      const nextFields = { ...prev.fields };
+      delete nextFields[key];
+      return { ...prev, fields: nextFields, global: undefined };
+    });
+  };
+
+  const handleNomineeChange = (
+    id: string,
+    key: NomineeField,
     value: string
   ) => {
-    setFormData((prev) => ({ ...prev, [key]: value }));
+    setFormData((prev) => ({
+      ...prev,
+      nominees: prev.nominees.map((nominee) =>
+        nominee.id === id ? { ...nominee, [key]: value } : nominee
+      ),
+    }));
+    setErrors((prev) => {
+      const nomineeErrors = prev.nominees[id];
+      if (!nomineeErrors?.[key] && !prev.global) {
+        return prev;
+      }
+      const nextNomineeErrors = { ...prev.nominees };
+      const updatedEntry = { ...(nextNomineeErrors[id] ?? {}) };
+      delete updatedEntry[key];
+      if (Object.keys(updatedEntry).length === 0) {
+        delete nextNomineeErrors[id];
+      } else {
+        nextNomineeErrors[id] = updatedEntry;
+      }
+      return { ...prev, nominees: nextNomineeErrors, global: undefined };
+    });
+  };
+
+  const addNominee = () => {
+    setFormData((prev) => ({
+      ...prev,
+      nominees: [...prev.nominees, createNominee()],
+    }));
+    setErrors((prev) => ({ ...prev, global: undefined }));
+  };
+
+  const removeNominee = (id: string) => {
+    setFormData((prev) => {
+      if (prev.nominees.length <= 1) {
+        return prev;
+      }
+      return {
+        ...prev,
+        nominees: prev.nominees.filter((nominee) => nominee.id !== id),
+      };
+    });
+    setErrors((prev) => {
+      const nextNomineeErrors = { ...prev.nominees };
+      delete nextNomineeErrors[id];
+      return { ...prev, nominees: nextNomineeErrors, global: undefined };
+    });
   };
 
   const handleSubmit = async () => {
@@ -207,11 +350,33 @@ export default function Home() {
       return;
     }
 
+    const validation = validateForm(formData);
+    setErrors(validation.errors);
+    if (validation.hasErrors) {
+      setStatus({
+        type: "error",
+        message:
+          validation.errors.global ??
+          "Please correct the highlighted fields before submitting.",
+      });
+      return;
+    }
+
     setSubmitting(true);
     setStatus({
       type: "info",
-      message: "Packaging onboarding details and sending securely via Graph…",
+      message: "Validating and sending securely via Microsoft Graph...",
     });
+
+    const emailToSend = (profile.email || account.username || "").toLowerCase();
+    if (!emailToSend.endsWith(ALLOWED_DOMAIN)) {
+      setSubmitting(false);
+      setStatus({
+        type: "error",
+        message: "Only @hts.asia accounts can submit onboarding packets.",
+      });
+      return;
+    }
 
     let effectiveToken = mailToken;
     if (!effectiveToken && msalInstance) {
@@ -241,7 +406,8 @@ export default function Home() {
       profile: {
         name:
           profile.name ||
-          `${formData.firstName} ${formData.lastName}`.trim() ||
+          formData.passportName ||
+          formData.callingName ||
           "HTS Employee",
         email: profile.email || account.username,
       },
@@ -266,9 +432,10 @@ export default function Home() {
       setStatus({
         type: "success",
         message:
-          "Onboarding packet sent to the PeopleOps mailbox with the Excel attachment.",
+          "Information submitted to PeopleOps with the Excel attachment.",
       });
-      setFormData(defaultForm);
+      setFormData(buildDefaultForm());
+      setErrors({ fields: {}, nominees: {} });
     } catch (error) {
       console.error("Submit error", error);
       setStatus({
@@ -283,32 +450,37 @@ export default function Home() {
 
   if (!account) {
     return (
-      <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-blue-50 via-white to-sky-100 text-slate-900">
-        <div className="pointer-events-none absolute inset-0">
-          <div className="absolute left-20 top-10 h-56 w-56 rounded-full bg-sky-100 blur-3xl" />
-          <div className="absolute right-12 top-20 h-72 w-72 rounded-full bg-blue-200 blur-3xl opacity-60" />
-          <div className="absolute bottom-10 right-16 h-60 w-60 rounded-full bg-sky-300 blur-3xl opacity-40" />
-        </div>
-
-        <main className="relative z-10 mx-auto flex min-h-screen max-w-4xl items-center justify-center px-6 py-12">
+      <div className="min-h-screen bg-[#f4f6fb] text-slate-900">
+        <main className="mx-auto flex min-h-screen max-w-4xl items-center px-6 py-12">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: "easeOut" }}
-            className="w-full rounded-3xl bg-white/80 p-10 text-center shadow-2xl shadow-blue-100 backdrop-blur-md ring-1 ring-white/60"
+            transition={{ duration: 0.5, ease: "easeOut" }}
+            className="w-full rounded-2xl bg-white p-10 shadow-lg ring-1 ring-slate-200"
           >
-            <div className="mx-auto mb-6 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-200">
-              <span className="text-xl font-semibold">HTS</span>
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white shadow-sm shadow-blue-200">
+                HTS
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-700">
+                  Employee Information
+                </p>
+                <p className="text-sm text-slate-500">
+                  Secure sign in with Microsoft
+                </p>
+              </div>
             </div>
-            <h1 className="text-3xl font-semibold text-slate-900">
-              Welcome to HTS onboarding
+            <h1 className="mt-5 text-3xl font-semibold text-slate-900">
+              Sign in to continue
             </h1>
-            <p className="mt-3 text-sm text-slate-600">
-              Sign in with your HTS Microsoft account to continue.
+            <p className="mt-2 text-sm text-slate-600">
+              Use your HTS Microsoft account to access and submit the employee
+              information form.
             </p>
 
             {!canAuth ? (
-              <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+              <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
                 Azure client/tenant env vars are missing. Populate them in
                 `.env.local` to enable Microsoft login.
               </div>
@@ -317,7 +489,7 @@ export default function Home() {
                 <button
                   onClick={handleLogin}
                   disabled={authLoading}
-                  className="mt-8 flex w-full items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-6 py-4 text-base font-semibold text-white shadow-lg shadow-sky-200 transition hover:shadow-xl hover:shadow-sky-200 disabled:cursor-not-allowed disabled:opacity-70"
+                  className="mt-8 flex w-full items-center justify-center gap-3 rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   {authLoading && (
                     <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -331,12 +503,12 @@ export default function Home() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0, y: -6 }}
-                      className={`mt-4 rounded-xl px-4 py-3 text-sm font-semibold ${
+                      className={`mt-4 rounded-lg px-4 py-3 text-sm font-semibold ${
                         status.type === "error"
-                          ? "bg-rose-50 text-rose-700 border border-rose-100"
+                          ? "border border-rose-200 bg-rose-50 text-rose-700"
                           : status.type === "success"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                            : "bg-sky-50 text-sky-700 border border-sky-100"
+                            ? "border border-emerald-200 bg-emerald-50 text-emerald-700"
+                            : "border border-blue-200 bg-blue-50 text-blue-700"
                       }`}
                     >
                       {status.message}
@@ -351,202 +523,764 @@ export default function Home() {
     );
   }
 
+  const dobError =
+    errors.fields.dobDay || errors.fields.dobMonth || errors.fields.dobYear;
+  const showGlobalError =
+    Boolean(errors.global) &&
+    !(status.type === "error" && status.message === errors.global);
+
   return (
-    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-blue-50 via-white to-sky-100 text-slate-900">
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute left-20 top-10 h-56 w-56 rounded-full bg-sky-100 blur-3xl" />
-        <div className="absolute right-12 top-20 h-72 w-72 rounded-full bg-blue-200 blur-3xl opacity-60" />
-        <div className="absolute bottom-10 right-16 h-60 w-60 rounded-full bg-sky-300 blur-3xl opacity-40" />
-      </div>
-
-      <main className="relative z-10 mx-auto flex min-h-screen max-w-6xl flex-col gap-10 px-6 py-12 lg:flex-row lg:items-start lg:py-16">
-        <motion.section
-          initial={{ opacity: 0, y: 30 }}
+    <div className="min-h-screen bg-[#f4f6fb] text-slate-900">
+      <main className="mx-auto max-w-5xl px-4 py-10">
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
-          className="flex-1 rounded-3xl bg-white/70 p-8 shadow-xl shadow-sky-100 backdrop-blur-md ring-1 ring-white/60"
+          transition={{ duration: 0.5, ease: "easeOut" }}
+          className="rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-200"
         >
-          <div className="mb-8 flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white shadow-lg shadow-sky-200">
-              <span className="text-xl font-semibold">HTS</span>
-            </div>
-            <div>
-              <p className="text-sm uppercase tracking-[0.2em] text-sky-700">
-                Employee Access
-              </p>
-              <h1 className="text-3xl font-semibold leading-tight text-slate-900 sm:text-4xl">
-                Welcome to HTS employee onboarding
-              </h1>
-            </div>
-          </div>
-
-          <p className="mb-6 max-w-2xl text-lg leading-relaxed text-slate-700">
-            Signed in as {profile.email ?? account.username}. Complete the form
-            to generate an Excel packet and send it to PeopleOps via Microsoft
-            Graph.
-          </p>
-
-          <div className="rounded-2xl border border-sky-100 bg-white px-4 py-3 shadow-sm shadow-sky-50">
-            <p className="text-xs uppercase tracking-[0.18em] text-sky-600">
-              Status
+          <div className="border-b border-slate-100 pb-6">
+            <h1 className="text-3xl font-semibold text-slate-900">
+              Employee Information
+            </h1>
+            <p className="mt-2 text-sm text-slate-600">
+              Please fill out the form carefully and accurately.
             </p>
-            <p className="text-sm font-semibold text-slate-800">
-              {status.message}
-            </p>
-          </div>
-        </motion.section>
-
-        <motion.section
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05, duration: 0.6, ease: "easeOut" }}
-          className="w-full max-w-xl rounded-3xl bg-white p-7 shadow-2xl shadow-blue-100 ring-1 ring-white/60"
-        >
-          <div className="mb-6 flex items-center justify-between">
-            <div>
-              <p className="text-xs uppercase tracking-[0.18em] text-sky-600">
-                Onboarding form
-              </p>
-              <h2 className="text-2xl font-semibold text-slate-900">
-                Finish and submit
-              </h2>
-            </div>
-            <div className="rounded-full bg-sky-50 px-3 py-1 text-xs font-semibold text-sky-700">
-              Signed in
+            <div className="mt-4 flex flex-wrap gap-3 text-sm text-slate-600">
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                Signed in
+              </span>
+              <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+                {profileLoading ? "Loading profile" : profile.name || "HTS employee"}
+              </span>
+              <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
+                {profile.email ?? account.username}
+              </span>
             </div>
           </div>
 
-          <div className="mb-6 rounded-2xl border border-sky-100 bg-white p-4 shadow-sm shadow-sky-50">
-            <div className="flex items-center gap-3">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-50 text-sky-700">
-                <span className="text-sm font-semibold">MS</span>
+          <div className="mt-4 space-y-3">
+            <StatusCallout status={status} />
+            {showGlobalError ? (
+              <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700">
+                {errors.global}
               </div>
-              <div>
-                <p className="text-xs uppercase tracking-[0.16em] text-sky-600">
-                  Signed in
-                </p>
-                <p className="text-sm font-semibold text-slate-900">
-                  {profileLoading
-                    ? "Loading profile…"
-                    : profile.name || "HTS employee"}
-                </p>
-                <p className="text-xs text-slate-500">
-                  {profile.email ?? account.username}
-                </p>
-              </div>
-            </div>
+            ) : null}
           </div>
 
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-2">
-              <FormField
-                label="First name"
-                value={formData.firstName}
-                onChange={(v) => handleInputChange("firstName", v)}
+          <FormSection title="Personal Information">
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextField
+                label="Name (As per Passport)"
+                required
+                value={formData.passportName}
+                onChange={(v) => handleFieldChange("passportName", v)}
+                error={errors.fields.passportName}
               />
-              <FormField
-                label="Last name"
-                value={formData.lastName}
-                onChange={(v) => handleInputChange("lastName", v)}
+              <TextField
+                label="Calling Name"
+                required
+                value={formData.callingName}
+                onChange={(v) => handleFieldChange("callingName", v)}
+                error={errors.fields.callingName}
               />
-              <FormField
-                label="Job title"
-                value={formData.jobTitle}
-                onChange={(v) => handleInputChange("jobTitle", v)}
+              <SelectField
+                label="Gender"
+                required
+                value={formData.gender}
+                onChange={(v) => handleFieldChange("gender", v)}
+                options={GENDER_OPTIONS}
+                placeholder="Select gender"
+                error={errors.fields.gender}
               />
-              <FormField
-                label="Department"
-                value={formData.department}
-                onChange={(v) => handleInputChange("department", v)}
+              <DateOfBirthField
+                value={{
+                  dobDay: formData.dobDay,
+                  dobMonth: formData.dobMonth,
+                  dobYear: formData.dobYear,
+                }}
+                onChange={handleFieldChange}
+                error={dobError}
               />
-              <FormField
-                label="Manager"
-                value={formData.manager}
-                onChange={(v) => handleInputChange("manager", v)}
+              <TextField
+                label="Nationality"
+                required
+                value={formData.nationality}
+                onChange={(v) => handleFieldChange("nationality", v)}
+                error={errors.fields.nationality}
               />
-              <FormField
-                label="Location"
-                value={formData.location}
-                onChange={(v) => handleInputChange("location", v)}
+              <TextField
+                label="Religion"
+                value={formData.religion}
+                onChange={(v) => handleFieldChange("religion", v)}
+                error={errors.fields.religion}
+                helper="Optional"
               />
-              <FormField
-                label="Start date"
-                type="date"
-                value={formData.startDate}
-                onChange={(v) => handleInputChange("startDate", v)}
+              <TextField
+                label="Passport No"
+                required
+                value={formData.passportNo}
+                onChange={(v) => handleFieldChange("passportNo", v)}
+                error={errors.fields.passportNo}
               />
-              <FormField
-                label="Equipment bundle"
-                value={formData.equipment}
-                onChange={(v) => handleInputChange("equipment", v)}
-                placeholder="Standard laptop + Office 365"
+              <SelectField
+                label="Marital Status"
+                required
+                value={formData.maritalStatus}
+                onChange={(v) => handleFieldChange("maritalStatus", v)}
+                options={MARITAL_STATUS_OPTIONS}
+                placeholder="Select status"
+                error={errors.fields.maritalStatus}
+              />
+              <TextField
+                label="Contact Details"
+                required
+                value={formData.contactNumber}
+                onChange={(v) => handleFieldChange("contactNumber", v)}
+                error={errors.fields.contactNumber}
+                placeholder="Mobile number"
+              />
+              <SelectField
+                label="Home Country"
+                required
+                value={formData.homeCountry}
+                onChange={(v) => handleFieldChange("homeCountry", v)}
+                options={HOME_COUNTRY_OPTIONS}
+                placeholder="Select country"
+                error={errors.fields.homeCountry}
+              />
+              <TextField
+                label="Personal Email"
+                required
+                type="email"
+                value={formData.personalEmail}
+                onChange={(v) => handleFieldChange("personalEmail", v)}
+                error={errors.fields.personalEmail}
               />
             </div>
-
-            <FormField
-              label="Notes or access needs"
-              value={formData.notes}
-              onChange={(v) => handleInputChange("notes", v)}
-              multiline
-              placeholder="VPN groups, software, building access, etc."
+            <TextAreaField
+              label="Residential Address"
+              required
+              value={formData.residentialAddress}
+              onChange={(v) => handleFieldChange("residentialAddress", v)}
+              error={errors.fields.residentialAddress}
+              placeholder="Street, city, postal code"
             />
+          </FormSection>
 
+          <FormSection title="Emergency Contacts">
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextField
+                label="Name"
+                required
+                value={formData.emergencyName}
+                onChange={(v) => handleFieldChange("emergencyName", v)}
+                error={errors.fields.emergencyName}
+              />
+              <TextField
+                label="Relationship"
+                required
+                value={formData.emergencyRelationship}
+                onChange={(v) =>
+                  handleFieldChange("emergencyRelationship", v)
+                }
+                error={errors.fields.emergencyRelationship}
+              />
+            </div>
+            <TextField
+              label="Contact No"
+              required
+              value={formData.emergencyContact}
+              onChange={(v) => handleFieldChange("emergencyContact", v)}
+              error={errors.fields.emergencyContact}
+            />
+            <TextAreaField
+              label="Address"
+              required
+              value={formData.emergencyAddress}
+              onChange={(v) => handleFieldChange("emergencyAddress", v)}
+              error={errors.fields.emergencyAddress}
+              placeholder="Full address of the emergency contact"
+            />
+          </FormSection>
+
+          <FormSection title="Additional Info to be registered at EPF/ETF Financial Fund">
+            <div className="grid gap-4 md:grid-cols-2">
+              <TextField
+                label="Birth Place"
+                required
+                value={formData.birthPlace}
+                onChange={(v) => handleFieldChange("birthPlace", v)}
+                error={errors.fields.birthPlace}
+              />
+              <TextField
+                label="Name of the Spouse (If Married)"
+                required={formData.maritalStatus === "Married"}
+                helper={
+                  formData.maritalStatus === "Married"
+                    ? "Required when married"
+                    : "Optional"
+                }
+                value={formData.spouseName}
+                onChange={(v) => handleFieldChange("spouseName", v)}
+                error={errors.fields.spouseName}
+              />
+              <TextField
+                label="Name of the Mother"
+                required
+                value={formData.motherName}
+                onChange={(v) => handleFieldChange("motherName", v)}
+                error={errors.fields.motherName}
+              />
+              <TextField
+                label="Name of the Father"
+                required
+                value={formData.fatherName}
+                onChange={(v) => handleFieldChange("fatherName", v)}
+                error={errors.fields.fatherName}
+              />
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="text-sm font-semibold text-slate-900">
+                  Nominees
+                </h4>
+                <p className="text-xs text-slate-500">
+                  Portions must total 100%
+                </p>
+              </div>
+              <NomineeTable
+                nominees={formData.nominees}
+                onChange={handleNomineeChange}
+                onRemove={removeNominee}
+                onAdd={addNominee}
+                errors={errors.nominees}
+              />
+            </div>
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+              You can nominate your spouse, children, or parents as nominees for
+              your EPF/ETF claim. You may add one or more nominees, and for each
+              nominee, you must provide their Identity Card (NIC) or Passport
+              number along with the percentage of the fund allocated to them. If
+              you nominate more than one person, the total percentage must add
+              up to 100% (for example, 70% and 30%).
+            </div>
+          </FormSection>
+
+          <div className="mt-8 flex justify-end">
             <button
               onClick={handleSubmit}
               disabled={submitting}
-              className="flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-500 to-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-sky-200 transition hover:shadow-xl hover:shadow-sky-200 disabled:cursor-not-allowed disabled:opacity-70"
+              className="flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-70"
             >
               {submitting && (
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
               )}
-              Send onboarding packet
+              Submit Information
             </button>
           </div>
-        </motion.section>
+        </motion.div>
       </main>
     </div>
   );
 }
 
-type FormFieldProps = {
+function FormSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="mt-8 space-y-4">
+      <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+      <div className="space-y-4">{children}</div>
+    </section>
+  );
+}
+
+function StatusCallout({ status }: { status: StatusState }) {
+  if (status.type === "idle") return null;
+  const tone =
+    status.type === "error"
+      ? "border-rose-200 bg-rose-50 text-rose-700"
+      : status.type === "success"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+        : "border-blue-200 bg-blue-50 text-blue-700";
+  return (
+    <div
+      className={`rounded-lg border px-4 py-3 text-sm font-semibold ${tone}`}
+    >
+      {status.message}
+    </div>
+  );
+}
+
+type FieldProps = {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  multiline?: boolean;
+  required?: boolean;
+  error?: string;
   type?: string;
+  helper?: string;
 };
 
-function FormField({
+function TextField({
   label,
   value,
   onChange,
   placeholder,
-  multiline = false,
+  required,
+  error,
   type = "text",
-}: FormFieldProps) {
-  const sharedClasses =
-    "w-full rounded-xl border border-sky-100 bg-white px-3 py-2 text-sm text-slate-900 shadow-inner shadow-sky-50 outline-none transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500";
+  helper,
+}: FieldProps) {
+  const baseClasses =
+    "w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none";
+  const ringClasses = error
+    ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+    : "border-slate-200";
 
   return (
-    <label className="space-y-2 text-sm font-semibold text-slate-800">
-      <span>{label}</span>
-      {multiline ? (
-        <textarea
-          className={`${sharedClasses} min-h-[96px] resize-none`}
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      ) : (
-        <input
-          className={sharedClasses}
-          type={type}
-          value={value}
-          placeholder={placeholder}
-          onChange={(e) => onChange(e.target.value)}
-        />
-      )}
+    <label className="space-y-1 text-sm font-semibold text-slate-800">
+      <div className="flex items-center gap-2">
+        <span>
+          {label}
+          {required ? <span className="text-rose-600"> *</span> : null}
+        </span>
+        {helper ? (
+          <span className="text-xs font-normal text-slate-500">{helper}</span>
+        ) : null}
+      </div>
+      <input
+        className={`${baseClasses} ${ringClasses}`}
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
     </label>
+  );
+}
+
+function TextAreaField({
+  label,
+  value,
+  onChange,
+  placeholder,
+  required,
+  error,
+}: FieldProps) {
+  const baseClasses =
+    "min-h-[100px] w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none resize-none";
+  const ringClasses = error
+    ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+    : "border-slate-200";
+
+  return (
+    <label className="space-y-1 text-sm font-semibold text-slate-800">
+      <span>
+        {label}
+        {required ? <span className="text-rose-600"> *</span> : null}
+      </span>
+      <textarea
+        className={`${baseClasses} ${ringClasses}`}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+    </label>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  placeholder,
+  required,
+  error,
+}: FieldProps & { options: string[] }) {
+  const baseClasses =
+    "w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none bg-white";
+  const ringClasses = error
+    ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+    : "border-slate-200";
+
+  return (
+    <label className="space-y-1 text-sm font-semibold text-slate-800">
+      <span>
+        {label}
+        {required ? <span className="text-rose-600"> *</span> : null}
+      </span>
+      <select
+        className={`${baseClasses} ${ringClasses}`}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      >
+        <option value="">{placeholder ?? "Select an option"}</option>
+        {options.map((option) => (
+          <option key={option} value={option}>
+            {option}
+          </option>
+        ))}
+      </select>
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+    </label>
+  );
+}
+
+function DateOfBirthField({
+  value,
+  onChange,
+  error,
+}: {
+  value: Pick<FormState, "dobDay" | "dobMonth" | "dobYear">;
+  onChange: (key: FieldKey, value: string) => void;
+  error?: string;
+}) {
+  const baseClasses =
+    "w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none";
+  const ringClasses = error
+    ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+    : "border-slate-200";
+
+  const numericChange = (key: FieldKey, input: string, maxLength: number) => {
+    const onlyNumbers = input.replace(/\D/g, "").slice(0, maxLength);
+    onChange(key, onlyNumbers);
+  };
+
+  return (
+    <div className="space-y-1 text-sm font-semibold text-slate-800">
+      <span>
+        Date of Birth <span className="text-rose-600">*</span>
+      </span>
+      <div className="grid grid-cols-3 gap-3">
+        <div>
+          <input
+            className={`${baseClasses} ${ringClasses}`}
+            type="text"
+            inputMode="numeric"
+            placeholder="Date"
+            value={value.dobDay}
+            onChange={(e) => numericChange("dobDay", e.target.value, 2)}
+          />
+        </div>
+        <div>
+          <input
+            className={`${baseClasses} ${ringClasses}`}
+            type="text"
+            inputMode="numeric"
+            placeholder="Month"
+            value={value.dobMonth}
+            onChange={(e) => numericChange("dobMonth", e.target.value, 2)}
+          />
+        </div>
+        <div>
+          <input
+            className={`${baseClasses} ${ringClasses}`}
+            type="text"
+            inputMode="numeric"
+            placeholder="Year"
+            value={value.dobYear}
+            onChange={(e) => numericChange("dobYear", e.target.value, 4)}
+          />
+        </div>
+      </div>
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+    </div>
+  );
+}
+
+function NomineeTable({
+  nominees,
+  onChange,
+  onRemove,
+  onAdd,
+  errors,
+}: {
+  nominees: Nominee[];
+  onChange: (id: string, key: NomineeField, value: string) => void;
+  onRemove: (id: string) => void;
+  onAdd: () => void;
+  errors: Record<string, Partial<Record<NomineeField, string>>>;
+}) {
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+      <div className="hidden gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1.2fr,1.2fr,1fr,0.6fr,auto]">
+        <span>Name of Nominee</span>
+        <span>Nominee Passport/ID No</span>
+        <span>Relationship</span>
+        <span>Portion (%)</span>
+        <span />
+      </div>
+      <div className="space-y-3">
+        {nominees.map((nominee) => (
+          <NomineeRow
+            key={nominee.id}
+            nominee={nominee}
+            onChange={onChange}
+            onRemove={onRemove}
+            disableRemove={nominees.length <= 1}
+            errors={errors[nominee.id]}
+          />
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={onAdd}
+        className="mt-4 flex w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-500 hover:text-blue-600"
+      >
+        + Add Another Nominee
+      </button>
+    </div>
+  );
+}
+
+function NomineeRow({
+  nominee,
+  onChange,
+  onRemove,
+  disableRemove,
+  errors,
+}: {
+  nominee: Nominee;
+  onChange: (id: string, key: NomineeField, value: string) => void;
+  onRemove: (id: string) => void;
+  disableRemove: boolean;
+  errors?: Partial<Record<NomineeField, string>>;
+}) {
+  return (
+    <div className="grid gap-3 sm:grid-cols-[1.2fr,1.2fr,1fr,0.6fr,auto]">
+      <NomineeInput
+        label="Name of Nominee"
+        placeholder="Full name"
+        value={nominee.name}
+        onChange={(value) => onChange(nominee.id, "name", value)}
+        error={errors?.name}
+      />
+      <NomineeInput
+        label="Nominee Passport/ID No"
+        placeholder="ID number"
+        value={nominee.passportId}
+        onChange={(value) => onChange(nominee.id, "passportId", value)}
+        error={errors?.passportId}
+      />
+      <div className="space-y-1">
+        <p className="text-xs font-semibold text-slate-500 sm:hidden">
+          Relationship
+        </p>
+        <select
+          className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none ${
+            errors?.relationship
+              ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+              : "border-slate-200"
+          }`}
+          value={nominee.relationship}
+          onChange={(e) => onChange(nominee.id, "relationship", e.target.value)}
+        >
+          <option value="">Select</option>
+          {RELATIONSHIP_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+        {errors?.relationship ? (
+          <p className="text-xs text-rose-600">{errors.relationship}</p>
+        ) : null}
+      </div>
+      <NomineeInput
+        label="Portion (%)"
+        placeholder="50"
+        value={nominee.portion}
+        onChange={(value) => onChange(nominee.id, "portion", value)}
+        error={errors?.portion}
+        type="number"
+      />
+      <div className="flex items-center sm:justify-end">
+        <button
+          type="button"
+          onClick={() => onRemove(nominee.id)}
+          disabled={disableRemove}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          Remove
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function NomineeInput({
+  label,
+  placeholder,
+  value,
+  onChange,
+  error,
+  type = "text",
+}: {
+  label: string;
+  placeholder?: string;
+  value: string;
+  onChange: (value: string) => void;
+  error?: string;
+  type?: string;
+}) {
+  const baseClasses =
+    "w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none";
+  const ringClasses = error
+    ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+    : "border-slate-200";
+  return (
+    <div className="space-y-1">
+      <p className="text-xs font-semibold text-slate-500 sm:hidden">{label}</p>
+      <input
+        className={`${baseClasses} ${ringClasses}`}
+        type={type}
+        inputMode={type === "number" ? "decimal" : undefined}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+    </div>
+  );
+}
+
+function validateForm(data: FormState): {
+  hasErrors: boolean;
+  errors: ValidationErrors;
+} {
+  const errors: ValidationErrors = { fields: {}, nominees: {} };
+  const required: FieldKey[] = [
+    "passportName",
+    "callingName",
+    "gender",
+    "dobDay",
+    "dobMonth",
+    "dobYear",
+    "nationality",
+    "passportNo",
+    "maritalStatus",
+    "contactNumber",
+    "homeCountry",
+    "personalEmail",
+    "residentialAddress",
+    "emergencyName",
+    "emergencyRelationship",
+    "emergencyContact",
+    "emergencyAddress",
+    "birthPlace",
+    "motherName",
+    "fatherName",
+  ];
+
+  required.forEach((field) => {
+    if (!data[field].trim()) {
+      errors.fields[field] = "This field is required.";
+    }
+  });
+
+  if (data.maritalStatus === "Married" && !data.spouseName.trim()) {
+    errors.fields.spouseName = "Spouse name is required for married employees.";
+  }
+
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (data.personalEmail && !emailPattern.test(data.personalEmail)) {
+    errors.fields.personalEmail = "Enter a valid email address.";
+  }
+
+  if (
+    data.dobDay &&
+    data.dobMonth &&
+    data.dobYear &&
+    !isValidDate(data.dobYear, data.dobMonth, data.dobDay)
+  ) {
+    errors.fields.dobYear = "Enter a valid date of birth.";
+  }
+
+  const phonePattern = /^[0-9+][0-9\s-]{6,}$/;
+  if (data.contactNumber && !phonePattern.test(data.contactNumber)) {
+    errors.fields.contactNumber = "Enter a valid contact number.";
+  }
+  if (data.emergencyContact && !phonePattern.test(data.emergencyContact)) {
+    errors.fields.emergencyContact = "Enter a valid contact number.";
+  }
+
+  const nomineeList = data.nominees ?? [];
+  if (!nomineeList.length) {
+    errors.global =
+      "Add at least one nominee and ensure their portions total 100%.";
+  }
+
+  let totalPortion = 0;
+  let portionsAreValid = true;
+  nomineeList.forEach((nominee) => {
+    const entryErrors: Partial<Record<NomineeField, string>> = {};
+    if (!nominee.name.trim()) {
+      entryErrors.name = "Required";
+    }
+    if (!nominee.passportId.trim()) {
+      entryErrors.passportId = "Required";
+    }
+    if (!nominee.relationship.trim()) {
+      entryErrors.relationship = "Required";
+    }
+    if (!nominee.portion.trim()) {
+      entryErrors.portion = "Required";
+      portionsAreValid = false;
+    } else {
+      const portionNumber = Number(nominee.portion);
+      if (!Number.isFinite(portionNumber) || portionNumber <= 0) {
+        entryErrors.portion = "Enter a number above 0";
+        portionsAreValid = false;
+      } else if (portionNumber > 100) {
+        entryErrors.portion = "Cannot exceed 100";
+        portionsAreValid = false;
+      } else {
+        totalPortion += portionNumber;
+      }
+    }
+    if (Object.keys(entryErrors).length) {
+      errors.nominees[nominee.id] = entryErrors;
+    }
+  });
+
+  if (
+    portionsAreValid &&
+    nomineeList.length &&
+    Math.abs(totalPortion - 100) > 0.01
+  ) {
+    errors.global = "Nominee portions must add up to 100%.";
+  }
+
+  const hasErrors =
+    Object.keys(errors.fields).length > 0 ||
+    Object.keys(errors.nominees).length > 0 ||
+    Boolean(errors.global);
+
+  return { hasErrors, errors };
+}
+
+function isValidDate(year: string, month: string, day: string) {
+  const y = Number(year);
+  const m = Number(month);
+  const d = Number(day);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || !Number.isFinite(d)) {
+    return false;
+  }
+  const date = new Date(y, m - 1, d);
+  return (
+    date.getFullYear() === y &&
+    date.getMonth() === m - 1 &&
+    date.getDate() === d
   );
 }
