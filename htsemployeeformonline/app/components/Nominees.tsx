@@ -21,8 +21,8 @@ export function NomineeTable({
 }: NomineeTableProps) {
   const gridCols = "grid-cols-[1.4fr,1fr,1fr,0.7fr,0.5fr]";
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-300">
-      <div className="min-w-[760px]">
+    <div className="overflow-x-auto rounded-xl border border-slate-300 bg-white">
+      <div className="min-w-[760px] space-y-2">
         <div
           className={`grid items-center ${gridCols} bg-blue-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-white`}
         >
@@ -32,7 +32,7 @@ export function NomineeTable({
           <span>Portion (%)</span>
           <span />
         </div>
-        <div className="divide-y divide-slate-200">
+        <div className="space-y-2">
           {nominees.map((nominee) => (
             <NomineeRow
               key={nominee.id}
@@ -78,24 +78,30 @@ function NomineeRow({
   gridCols,
 }: NomineeRowProps) {
   return (
-    <div className={`grid items-center gap-3 px-3 py-2 ${gridCols}`}>
-      <NomineeInput
-        label="Full Name"
-        placeholder="Full name"
-        value={nominee.name}
-        onChange={(value) => onChange(nominee.id, "name", value)}
-        error={errors?.name}
-        compact
-      />
-      <NomineeInput
-        label="Passport/ID No"
-        placeholder="ID number"
-        value={nominee.passportId}
-        onChange={(value) => onChange(nominee.id, "passportId", value)}
-        error={errors?.passportId}
-        compact
-      />
-      <div className="space-y-1">
+    <div
+      className={`grid items-center gap-px bg-slate-200 px-3 py-2 ${gridCols} rounded-md`}
+    >
+      <div className="bg-white p-2">
+        <NomineeInput
+          label="Full Name"
+          placeholder="Full name"
+          value={nominee.name}
+          onChange={(value) => onChange(nominee.id, "name", value)}
+          error={errors?.name}
+          compact
+        />
+      </div>
+      <div className="bg-white p-2">
+        <NomineeInput
+          label="Passport/ID No"
+          placeholder="ID number"
+          value={nominee.passportId}
+          onChange={(value) => onChange(nominee.id, "passportId", value)}
+          error={errors?.passportId}
+          compact
+        />
+      </div>
+      <div className="bg-white p-2">
         <label className="sr-only" htmlFor={`relationship-${nominee.id}`}>
           Relationship
         </label>
@@ -120,16 +126,18 @@ function NomineeRow({
           <p className="text-xs text-rose-600">{errors.relationship}</p>
         ) : null}
       </div>
-      <NomineeInput
-        label="Portion (%)"
-        placeholder="50"
-        value={nominee.portion}
-        onChange={(value) => onChange(nominee.id, "portion", value)}
-        error={errors?.portion}
-        type="number"
-        compact
-      />
-      <div className="flex items-center justify-end">
+      <div className="bg-white p-2">
+        <NomineeInput
+          label="Portion (%)"
+          placeholder="50"
+          value={nominee.portion}
+          onChange={(value) => onChange(nominee.id, "portion", value)}
+          error={errors?.portion}
+          type="number"
+          compact
+        />
+      </div>
+      <div className="flex items-center justify-end bg-white p-2">
         <button
           type="button"
           onClick={() => onRemove(nominee.id)}
