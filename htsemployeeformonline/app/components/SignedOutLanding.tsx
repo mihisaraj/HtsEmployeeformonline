@@ -3,12 +3,11 @@
 import Image from "next/image";
 import { RefObject } from "react";
 import { motion } from "framer-motion";
-import { StatusCallout } from "./StatusCallout";
 import { StatusState } from "../types/status";
 
 type SignedOutLandingProps = {
-  landingRef: RefObject<HTMLDivElement>;
-  heroRef: RefObject<HTMLElement>;
+  landingRef: RefObject<HTMLDivElement | null>;
+  heroRef: RefObject<HTMLElement | null>;
   canAuth: boolean;
   authLoading: boolean;
   status: StatusState;
@@ -22,11 +21,12 @@ export function SignedOutLanding({
   heroRef,
   canAuth,
   authLoading,
-  status,
+  status: _status,
   onLogin,
   showDetails,
   onProceed,
 }: SignedOutLandingProps) {
+  void _status;
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-blue-50 text-slate-900">
       <div ref={landingRef} className="relative overflow-hidden">
@@ -52,11 +52,9 @@ export function SignedOutLanding({
                   priority
                 />
               </div>
-              <div className="rounded-full bg-white/80 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-blue-700 shadow-sm ring-1 ring-blue-100">
-                HTS Family Welcome
-              </div>
+              
               <h1 className="text-4xl font-semibold leading-tight text-slate-900 sm:text-5xl">
-                Welcome to Harbour Tech Solutions
+                Welcome to HTS
               </h1>
               {!showDetails && (
                 <button
@@ -77,7 +75,7 @@ export function SignedOutLanding({
             >
               <div className="space-y-3">
                 <h2 className="text-2xl font-semibold text-slate-900">
-                  Welcome aboard, dear colleague.
+        Dear Colleague.
                 </h2>
                 <motion.p
                   className="text-sm leading-relaxed text-slate-700"
@@ -107,12 +105,10 @@ export function SignedOutLanding({
               </div>
 
               <div className="space-y-3 rounded-2xl bg-blue-50/70 p-4 ring-1 ring-blue-100">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700">
-                  Ready to begin
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-700 animate-pulse">
+                  Submit Your Employee Information Form
                 </p>
-                <p className="text-sm text-slate-700">
-                  Sign in securely with your HTS Microsoft account to continue.
-                </p>
+                
                 {!canAuth ? (
                   <div className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-blue-900">
                     Azure client/tenant env vars are missing. Populate them in
@@ -127,10 +123,10 @@ export function SignedOutLanding({
                     {authLoading && (
                       <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
                     )}
-                    Sign in with Microsoft
+                    Sign in here and Fill Your HTS Credintials
                   </button>
                 )}
-                <StatusCallout status={status} />
+               
               </div>
             </div>
           </div>

@@ -21,7 +21,7 @@ import {
   useSignedOutAnimations,
 } from "./hooks/animations";
 
-const GENDER_OPTIONS = ["Male", "Female", "Non-binary", "Prefer not to say"];
+const GENDER_OPTIONS = ["Male", "Female", "Non-binary"];
 const MARITAL_STATUS_OPTIONS = ["Single", "Married", "Widowed", "Divorced"];
 const RELATIONSHIP_OPTIONS = [
   "Spouse",
@@ -33,6 +33,12 @@ const RELATIONSHIP_OPTIONS = [
   "Other",
 ];
 const HOME_COUNTRY_OPTIONS = ["Sri Lanka", "India", "Malaysia", "Singapore"];
+const HOME_COUNTRY_CODES = [
+  { label: "Sri Lanka (+94)", value: "+94" },
+  { label: "India (+91)", value: "+91" },
+  { label: "Malaysia (+60)", value: "+60" },
+  { label: "Singapore (+65)", value: "+65" },
+];
 
 let nomineeIdCounter = 0;
 
@@ -55,8 +61,12 @@ const buildDefaultForm = (): FormState => ({
   religion: "",
   passportNo: "",
   maritalStatus: "",
-  contactNumber: "",
+  sriLankaContact: "",
+  homeContactCode: "",
+  homeContactNumber: "",
   homeCountry: "Sri Lanka",
+  sriLankaAddress: "",
+  homeCountryAddress: "",
   personalEmail: "",
   residentialAddress: "",
   emergencyName: "",
@@ -98,9 +108,9 @@ export default function Home() {
   const [authLoading, setAuthLoading] = useState(false);
   const [profileLoading, setProfileLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const landingRef = useRef<HTMLDivElement>(null);
-  const flowRef = useRef<HTMLDivElement>(null);
-  const heroRef = useRef<HTMLDivElement>(null);
+  const landingRef = useRef<HTMLDivElement | null>(null);
+  const flowRef = useRef<HTMLDivElement | null>(null);
+  const heroRef = useRef<HTMLDivElement | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
 
@@ -308,15 +318,10 @@ export default function Home() {
   };
 
   const removeNominee = (id: string) => {
-    setFormData((prev) => {
-      if (prev.nominees.length <= 1) {
-        return prev;
-      }
-      return {
-        ...prev,
-        nominees: prev.nominees.filter((nominee) => nominee.id !== id),
-      };
-    });
+    setFormData((prev) => ({
+      ...prev,
+      nominees: prev.nominees.filter((nominee) => nominee.id !== id),
+    }));
     setErrors((prev) => {
       const nextNomineeErrors = { ...prev.nominees };
       delete nextNomineeErrors[id];
@@ -485,6 +490,7 @@ export default function Home() {
         countryOptions={HOME_COUNTRY_OPTIONS}
         genderOptions={GENDER_OPTIONS}
         maritalOptions={MARITAL_STATUS_OPTIONS}
+        countryCodes={HOME_COUNTRY_CODES}
       />
     </div>
   );
@@ -506,10 +512,13 @@ function validateForm(data: FormState): {
     "nationality",
     "passportNo",
     "maritalStatus",
-    "contactNumber",
+    "sriLankaContact",
+    "homeContactCode",
+    "homeContactNumber",
     "homeCountry",
+    "sriLankaAddress",
+    "homeCountryAddress",
     "personalEmail",
-    "residentialAddress",
     "emergencyName",
     "emergencyRelationship",
     "emergencyContact",
@@ -543,10 +552,19 @@ function validateForm(data: FormState): {
     errors.fields.dobYear = "Enter a valid date of birth.";
   }
 
-  const phonePattern = /^[0-9+][0-9\s-]{6,}$/;
-  if (data.contactNumber && !phonePattern.test(data.contactNumber)) {
-    errors.fields.contactNumber = "Enter a valid contact number.";
+  const sriLankaPattern = /^\+94\d{9}$/;
+  if (data.sriLankaContact && !sriLankaPattern.test(data.sriLankaContact)) {
+    errors.fields.sriLankaContact =
+      "Sri Lanka contact must start with +94 and include 9 digits.";
   }
+  const homePattern = /^\d{6,12}$/;
+  if (data.homeContactNumber && !homePattern.test(data.homeContactNumber)) {
+    errors.fields.homeContactNumber = "Enter 6-12 digits for home contact.";
+  }
+  if (!data.homeContactCode.trim()) {
+    errors.fields.homeContactCode = "Select a home contact code.";
+  }
+  const phonePattern = /^[0-9+][0-9\s-]{6,}$/;
   if (data.emergencyContact && !phonePattern.test(data.emergencyContact)) {
     errors.fields.emergencyContact = "Enter a valid contact number.";
   }

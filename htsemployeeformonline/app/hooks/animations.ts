@@ -9,8 +9,8 @@ gsap.registerPlugin(ScrollTrigger);
    🔥 Signed OUT (landing page) animations 
 ------------------------------------------------ */
 export function useSignedOutAnimations(
-  landingRef: any,
-  heroRef: any,
+  landingRef: React.RefObject<HTMLElement | null>,
+  heroRef: React.RefObject<HTMLElement | null>,
 ) {
   useEffect(() => {
     if (!landingRef.current || !heroRef.current) return;
@@ -75,7 +75,7 @@ export function useSignedOutAnimations(
       });
 
       /* 🟦 Smooth stagger reveals */
-      gsap.utils.toArray(".welcome-reveal").forEach((el: any, i) => {
+      gsap.utils.toArray<HTMLElement>(".welcome-reveal").forEach((el, i) => {
         gsap.from(el, {
           opacity: 0,
           y: 30,
@@ -97,13 +97,13 @@ export function useSignedOutAnimations(
 /* -----------------------------------------------
    🔥 Signed IN (form page) animations 
 ------------------------------------------------ */
-export function useSignedInAnimations(flowRef: any) {
+export function useSignedInAnimations(flowRef: React.RefObject<HTMLElement | null>) {
   useEffect(() => {
     if (!flowRef.current) return;
 
     const ctx = gsap.context(() => {
       /* 🟩 Slide-in form sections */
-      gsap.utils.toArray(".flow-reveal").forEach((el: any, index: number) => {
+      gsap.utils.toArray<HTMLElement>(".flow-reveal").forEach((el, index) => {
         const xShift = index % 2 === 0 ? -40 : 40;
 
         gsap.from(el, {
@@ -121,8 +121,8 @@ export function useSignedInAnimations(flowRef: any) {
 
       /* 🟩 Inputs: subtle 3D tilt on hover */
       gsap.utils
-        .toArray("input, select, textarea")
-        .forEach((field: any) => {
+        .toArray<HTMLElement>("input, select, textarea")
+        .forEach((field) => {
           field.addEventListener("mouseenter", () => {
             gsap.to(field, {
               rotateX: 4,

@@ -11,8 +11,12 @@ export type FormState = {
   religion: string;
   passportNo: string;
   maritalStatus: string;
-  contactNumber: string;
+  sriLankaContact: string;
+  homeContactCode: string;
+  homeContactNumber: string;
   homeCountry: string;
+  sriLankaAddress: string;
+  homeCountryAddress: string;
   personalEmail: string;
   residentialAddress: string;
   emergencyName: string;

@@ -16,7 +16,7 @@ import { FormState, ValidationErrors, FieldKey } from "../types/formState";
 import { NomineeField } from "../types/form";
 
 type SignedInFormProps = {
-  flowRef: RefObject<HTMLDivElement>;
+  flowRef: RefObject<HTMLDivElement | null>;
   status: StatusState;
   showGlobalError: boolean;
   errors: ValidationErrors;
@@ -35,6 +35,7 @@ type SignedInFormProps = {
   countryOptions: string[];
   genderOptions: string[];
   maritalOptions: string[];
+  countryCodes: { label: string; value: string }[];
 };
 
 export function SignedInForm({
@@ -57,6 +58,7 @@ export function SignedInForm({
   countryOptions,
   genderOptions,
   maritalOptions,
+  countryCodes,
 }: SignedInFormProps) {
   return (
     <main
@@ -160,13 +162,55 @@ export function SignedInForm({
               error={errors.fields.maritalStatus}
             />
             <TextField
-              label="Contact Details"
+              label="Sri Lanka Contact"
               required
-              value={formData.contactNumber}
-              onChange={(v) => onFieldChange("contactNumber", v)}
-              error={errors.fields.contactNumber}
-              placeholder="Mobile number"
+              value={formData.sriLankaContact}
+              onChange={(v) => onFieldChange("sriLankaContact", v)}
+              error={errors.fields.sriLankaContact}
+              placeholder="+94XXXXXXXXX"
             />
+            <div className="space-y-1 text-sm font-semibold text-slate-800">
+              <span>Home Contact</span>
+              <div className="grid grid-cols-[0.35fr,1fr] gap-3">
+                <label className="text-xs font-semibold text-slate-500">
+                  <select
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none ${
+                      errors.fields.homeContactCode
+                        ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+                        : "border-slate-200"
+                    }`}
+                    value={formData.homeContactCode}
+                    onChange={(e) => onFieldChange("homeContactCode", e.target.value)}
+                  >
+                    <option value="">Code</option>
+                    {countryCodes.map((code) => (
+                      <option key={code.value} value={code.value}>
+                        {code.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="text-xs font-semibold text-slate-500">
+                  <input
+                    className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none ${
+                      errors.fields.homeContactNumber
+                        ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
+                        : "border-slate-200"
+                    }`}
+                    type="tel"
+                    value={formData.homeContactNumber}
+                    placeholder="Enter number"
+                    onChange={(e) => onFieldChange("homeContactNumber", e.target.value)}
+                  />
+                </label>
+              </div>
+              <div className="flex flex-col gap-1 text-xs font-semibold text-rose-600">
+                {errors.fields.homeContactCode ? <span>{errors.fields.homeContactCode}</span> : null}
+                {errors.fields.homeContactNumber ? (
+                  <span>{errors.fields.homeContactNumber}</span>
+                ) : null}
+              </div>
+            </div>
             <SelectField
               label="Home Country"
               required
@@ -185,14 +229,24 @@ export function SignedInForm({
               error={errors.fields.personalEmail}
             />
           </div>
-          <TextAreaField
-            label="Residential Address"
-            required
-            value={formData.residentialAddress}
-            onChange={(v) => onFieldChange("residentialAddress", v)}
-            error={errors.fields.residentialAddress}
-            placeholder="Street, city, postal code"
-          />
+          <div className="grid gap-4 md:grid-cols-2">
+            <TextAreaField
+              label="Sri Lanka Residential Address"
+              required
+              value={formData.sriLankaAddress}
+              onChange={(v) => onFieldChange("sriLankaAddress", v)}
+              error={errors.fields.sriLankaAddress}
+              placeholder="Street, city, postal code"
+            />
+            <TextAreaField
+              label="Home Country Address"
+              required
+              value={formData.homeCountryAddress}
+              onChange={(v) => onFieldChange("homeCountryAddress", v)}
+              error={errors.fields.homeCountryAddress}
+              placeholder="Full address in home country"
+            />
+          </div>
         </FormSection>
       </div>
 
@@ -243,13 +297,8 @@ export function SignedInForm({
               error={errors.fields.birthPlace}
             />
             <TextField
-              label="Name of the Spouse (If Married)"
+              label="Name of Spouse"
               required={formData.maritalStatus === "Married"}
-              helper={
-                formData.maritalStatus === "Married"
-                  ? "Required when married"
-                  : "Optional"
-              }
               value={formData.spouseName}
               onChange={(v) => onFieldChange("spouseName", v)}
               error={errors.fields.spouseName}
@@ -280,8 +329,8 @@ export function SignedInForm({
             <NomineeTable
               nominees={formData.nominees}
               onChange={onNomineeChange}
-              onRemove={onRemoveNominee}
               onAdd={onAddNominee}
+              onRemove={onRemoveNominee}
               errors={errors.nominees}
               relationshipOptions={relationshipOptions}
             />

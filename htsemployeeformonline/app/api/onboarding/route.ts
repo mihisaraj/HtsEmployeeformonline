@@ -24,7 +24,12 @@ type OnboardingForm = {
   contactNumber?: string;
   homeCountry?: string;
   personalEmail?: string;
+  sriLankaContact?: string;
+  homeContactCode?: string;
+  homeContactNumber?: string;
   residentialAddress?: string;
+  sriLankaAddress?: string;
+  homeCountryAddress?: string;
   emergencyName?: string;
   emergencyRelationship?: string;
   emergencyContact?: string;
@@ -131,10 +136,13 @@ function buildWorkbook(payload: OnboardingBody) {
     ["Religion", form.religion ?? ""],
     ["Passport No", form.passportNo ?? ""],
     ["Marital Status", form.maritalStatus ?? ""],
-    ["Contact Details", form.contactNumber ?? ""],
+    ["Sri Lanka Contact", form.sriLankaContact ?? ""],
+    ["Home Contact Code", form.homeContactCode ?? ""],
+    ["Home Contact Number", form.homeContactNumber ?? ""],
     ["Home Country", form.homeCountry ?? ""],
     ["Personal Email", form.personalEmail ?? ""],
-    ["Residential Address", form.residentialAddress ?? ""],
+    ["Sri Lanka Address", form.sriLankaAddress ?? ""],
+    ["Home Country Address", form.homeCountryAddress ?? ""],
     [],
     ["Emergency Contact"],
     ["Name", form.emergencyName ?? ""],
@@ -190,12 +198,13 @@ function buildHtml(payload: OnboardingBody) {
     <ul>
       <li><strong>Name:</strong> ${form.passportName ?? form.callingName ?? ""}</li>
       <li><strong>Gender / DOB:</strong> ${form.gender ?? ""}${dob ? ` - ${dob}` : ""}</li>
-      <li><strong>Contact:</strong> ${form.contactNumber ?? ""} - ${form.personalEmail ?? ""}</li>
+      <li><strong>Contact:</strong> ${form.sriLankaContact ?? ""} | ${form.homeContactCode ?? ""} ${form.homeContactNumber ?? ""} · ${form.personalEmail ?? ""}</li>
       <li><strong>Home country:</strong> ${form.homeCountry ?? ""}</li>
       <li><strong>Emergency contact:</strong> ${emergencyLine}</li>
       <li><strong>Nominees:</strong> ${nomineePreview || "Not provided"}</li>
     </ul>
-    <p>Residential address:<br />${(form.residentialAddress ?? "").replace(/\n/g, "<br />")}</p>
+    <p>Sri Lanka address:<br />${(form.sriLankaAddress ?? "").replace(/\n/g, "<br />")}</p>
+    <p>Home country address:<br />${(form.homeCountryAddress ?? "").replace(/\n/g, "<br />")}</p>
     <p>Emergency address:<br />${(form.emergencyAddress ?? "").replace(/\n/g, "<br />")}</p>
     <p>Spouse / parents:<br />${form.spouseName ?? ""} | ${form.motherName ?? ""} | ${form.fatherName ?? ""}</p>
     <p>- HTS onboarding portal</p>

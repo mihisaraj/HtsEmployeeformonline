@@ -5,8 +5,8 @@ import { Nominee, NomineeField } from "../types/form";
 type NomineeTableProps = {
   nominees: Nominee[];
   onChange: (id: string, key: NomineeField, value: string) => void;
-  onRemove: (id: string) => void;
   onAdd: () => void;
+  onRemove: (id: string) => void;
   errors: Record<string, Partial<Record<NomineeField, string>>>;
   relationshipOptions: string[];
 };
@@ -19,35 +19,41 @@ export function NomineeTable({
   errors,
   relationshipOptions,
 }: NomineeTableProps) {
+  const gridCols = "grid-cols-[1.4fr,1fr,1fr,0.7fr,0.5fr]";
   return (
-    <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
-      <div className="hidden gap-3 text-xs font-semibold uppercase tracking-wide text-slate-500 sm:grid sm:grid-cols-[1.2fr,1.2fr,1fr,0.6fr,auto]">
-        <span>Name of Nominee</span>
-        <span>Nominee Passport/ID No</span>
-        <span>Relationship</span>
-        <span>Portion (%)</span>
-        <span />
+    <div className="overflow-x-auto rounded-xl border border-slate-300">
+      <div className="min-w-[760px]">
+        <div
+          className={`grid items-center ${gridCols} bg-blue-700 px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-white`}
+        >
+          <span>Full Name</span>
+          <span>ID / Passport No</span>
+          <span>Relationship</span>
+          <span>Portion (%)</span>
+          <span />
+        </div>
+        <div className="divide-y divide-slate-200">
+          {nominees.map((nominee) => (
+            <NomineeRow
+              key={nominee.id}
+              nominee={nominee}
+              onChange={onChange}
+              onRemove={onRemove}
+              disableRemove={nominees.length <= 1}
+              errors={errors[nominee.id]}
+              relationshipOptions={relationshipOptions}
+              gridCols={gridCols}
+            />
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={onAdd}
+          className="w-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+        >
+          + Add Nominee
+        </button>
       </div>
-      <div className="space-y-3">
-        {nominees.map((nominee) => (
-          <NomineeRow
-            key={nominee.id}
-            nominee={nominee}
-            onChange={onChange}
-            onRemove={onRemove}
-            disableRemove={nominees.length <= 1}
-            errors={errors[nominee.id]}
-            relationshipOptions={relationshipOptions}
-          />
-        ))}
-      </div>
-      <button
-        type="button"
-        onClick={onAdd}
-        className="mt-4 flex w-full items-center justify-center rounded-lg border border-dashed border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-blue-500 hover:text-blue-600"
-      >
-        + Add Another Nominee
-      </button>
     </div>
   );
 }
@@ -59,6 +65,7 @@ type NomineeRowProps = {
   disableRemove: boolean;
   errors?: Partial<Record<NomineeField, string>>;
   relationshipOptions: string[];
+  gridCols: string;
 };
 
 function NomineeRow({
@@ -68,28 +75,32 @@ function NomineeRow({
   disableRemove,
   errors,
   relationshipOptions,
+  gridCols,
 }: NomineeRowProps) {
   return (
-    <div className="grid gap-3 sm:grid-cols-[1.2fr,1.2fr,1fr,0.6fr,auto]">
+    <div className={`grid items-center gap-3 px-3 py-2 ${gridCols}`}>
       <NomineeInput
-        label="Name of Nominee"
+        label="Full Name"
         placeholder="Full name"
         value={nominee.name}
         onChange={(value) => onChange(nominee.id, "name", value)}
         error={errors?.name}
+        compact
       />
       <NomineeInput
-        label="Nominee Passport/ID No"
+        label="Passport/ID No"
         placeholder="ID number"
         value={nominee.passportId}
         onChange={(value) => onChange(nominee.id, "passportId", value)}
         error={errors?.passportId}
+        compact
       />
       <div className="space-y-1">
-        <p className="text-xs font-semibold text-slate-500 sm:hidden">
+        <label className="sr-only" htmlFor={`relationship-${nominee.id}`}>
           Relationship
-        </p>
+        </label>
         <select
+          id={`relationship-${nominee.id}`}
           className={`w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none ${
             errors?.relationship
               ? "border-rose-300 ring-1 ring-rose-100 focus:ring-rose-100 focus:border-rose-400"
@@ -116,13 +127,14 @@ function NomineeRow({
         onChange={(value) => onChange(nominee.id, "portion", value)}
         error={errors?.portion}
         type="number"
+        compact
       />
-      <div className="flex items-center sm:justify-end">
+      <div className="flex items-center justify-end">
         <button
           type="button"
           onClick={() => onRemove(nominee.id)}
           disabled={disableRemove}
-          className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:border-rose-300 hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+          className="text-xs font-semibold text-rose-600 disabled:opacity-40"
         >
           Remove
         </button>
@@ -138,6 +150,7 @@ function NomineeInput({
   onChange,
   error,
   type = "text",
+  compact = false,
 }: {
   label: string;
   placeholder?: string;
@@ -145,6 +158,7 @@ function NomineeInput({
   onChange: (value: string) => void;
   error?: string;
   type?: string;
+  compact?: boolean;
 }) {
   const baseClasses =
     "w-full rounded-lg border px-3 py-2.5 text-sm shadow-sm transition focus:ring-2 focus:ring-blue-100 focus:border-blue-500 outline-none";
@@ -153,7 +167,7 @@ function NomineeInput({
     : "border-slate-200";
   return (
     <div className="space-y-1">
-      <p className="text-xs font-semibold text-slate-500 sm:hidden">{label}</p>
+      <label className="sr-only">{label}</label>
       <input
         className={`${baseClasses} ${ringClasses}`}
         type={type}
@@ -162,7 +176,7 @@ function NomineeInput({
         placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
-      {error ? <p className="text-xs text-rose-600">{error}</p> : null}
+      {error && !compact ? <p className="text-xs text-rose-600">{error}</p> : null}
     </div>
   );
 }
