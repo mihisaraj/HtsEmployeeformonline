@@ -37,7 +37,7 @@ const msalClientId = process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
 const msalTenantId = process.env.NEXT_PUBLIC_AZURE_TENANT_ID;
 const msalRedirectUri =
   process.env.NEXT_PUBLIC_AZURE_REDIRECT_URI ?? "http://localhost:3000";
-const LOGIN_SCOPES = ["User.Read", "Mail.Send"] as const;
+const LOGIN_SCOPES: string[] = ["User.Read", "Mail.Send"];
 
 export default function Home() {
   const [msalInstance, setMsalInstance] = useState<
