@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import nodemailer from "nodemailer";
 
 export const runtime = "nodejs";
 
@@ -46,12 +47,17 @@ type OnboardingBody = {
     name?: string;
     email?: string;
   };
-  accessToken?: string;
   form?: OnboardingForm;
 };
 
-const ALLOWED_DOMAIN = "@hts.asia";
-const requiredEnv = ["GRAPH_RECIPIENT_EMAIL"];
+// Required environment variables for SMTP
+const requiredEnv = [
+  "SMTP_HOST",
+  "SMTP_PORT",
+  "SMTP_USER",
+  "SMTP_PASS",
+  "SMTP_TO",   // The email address to send TO (PeopleOps)
+];
 
 export async function POST(req: Request) {
   try {
@@ -73,31 +79,21 @@ export async function POST(req: Request) {
       );
     }
 
-    const senderEmail = body.profile.email.toLowerCase();
-    if (!senderEmail.endsWith(ALLOWED_DOMAIN)) {
-      return NextResponse.json(
-        { error: "Only @hts.asia accounts can submit onboarding packets." },
-        { status: 403 }
-      );
-    }
-
-    if (!body?.accessToken) {
-      return NextResponse.json(
-        { error: "Missing access token to send mail as the signed-in user." },
-        { status: 401 }
-      );
-    }
-
     const workbook = buildWorkbook(body);
-    const attachmentBytes = workbook.toString("base64");
+    const attachmentBuffer = workbook; // XLSX.write returns buffer
     const subject = buildSubject(body);
     const html = buildHtml(body);
 
-    await sendMailWithAttachment(
-      body.accessToken,
-      attachmentBytes,
+    // Configurable sender Name
+    const senderDisplayName = body.profile?.name || "HTS Applicant";
+    const userEmail = body.profile.email;
+
+    await sendMailWithNodemailer(
+      attachmentBuffer,
       subject,
-      html
+      html,
+      senderDisplayName,
+      userEmail
     );
 
     return NextResponse.json({ success: true });
@@ -107,6 +103,43 @@ export async function POST(req: Request) {
       error instanceof Error ? error.message : "Unexpected server error.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
+}
+
+async function sendMailWithNodemailer(
+  attachmentBuffer: Buffer,
+  subject: string,
+  html: string,
+  senderName: string,
+  userEmail: string
+) {
+  const transporter = nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT),
+    secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
+  const mailOptions = {
+    // STANDARD SOLUTION: Secure Delivery + Correct Reply
+    // 1. From: "John Doe" <mihisara@hts.asia> (Technical Sender is you, Visual Name is them)
+    // 2. Reply-To: john.doe@gmail.com (Replying goes to them)
+    from: `"${senderName}" <${process.env.SMTP_USER}>`,
+    to: process.env.SMTP_TO,
+    replyTo: userEmail,
+    subject: subject,
+    html: html,
+    attachments: [
+      {
+        filename: `hts-onboarding-${Date.now()}.xlsx`,
+        content: attachmentBuffer,
+      },
+    ],
+  };
+
+  await transporter.sendMail(mailOptions);
 }
 
 function buildWorkbook(payload: OnboardingBody) {
@@ -172,7 +205,8 @@ function buildSubject(payload: OnboardingBody) {
     payload.form?.passportName?.trim() ||
     payload.form?.callingName?.trim() ||
     "New hire";
-  return `HTS Onboarding | ${fullName}`;
+  const email = payload.profile?.email ? ` | ${payload.profile.email}` : "";
+  return `HTS Onboarding | ${fullName}${email}`;
 }
 
 function buildHtml(payload: OnboardingBody) {
@@ -218,52 +252,4 @@ function formatDateOfBirth(form: OnboardingForm) {
     form.dobYear?.trim(),
   ].filter(Boolean);
   return parts.join("-");
-}
-
-async function sendMailWithAttachment(
-  accessToken: string,
-  attachmentBase64: string,
-  subject: string,
-  html: string
-) {
-  const recipient = process.env.GRAPH_RECIPIENT_EMAIL!;
-
-  const payload = {
-    message: {
-      subject,
-      body: {
-        contentType: "HTML",
-        content: html,
-      },
-      toRecipients: [
-        {
-          emailAddress: {
-            address: recipient,
-          },
-        },
-      ],
-      attachments: [
-        {
-          "@odata.type": "#microsoft.graph.fileAttachment",
-          name: `hts-onboarding-${Date.now()}.xlsx`,
-          contentBytes: attachmentBase64,
-        },
-      ],
-    },
-    saveToSentItems: true,
-  };
-
-  const res = await fetch(`https://graph.microsoft.com/v1.0/me/sendMail`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Graph sendMail failed (${res.status}): ${text}`);
-  }
 }

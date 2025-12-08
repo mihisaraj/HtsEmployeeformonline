@@ -1,17 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { RefObject } from "react";
+import { FormEvent, RefObject, useState } from "react";
 import { motion } from "framer-motion";
-import { StatusState } from "../types/status";
 
 type SignedOutLandingProps = {
   landingRef: RefObject<HTMLDivElement | null>;
   heroRef: RefObject<HTMLElement | null>;
-  canAuth: boolean;
-  authLoading: boolean;
-  status: StatusState;
-  onLogin: () => void;
+  onEmailSubmit: (email: string) => void;
   showDetails: boolean;
   onProceed: () => void;
 };
@@ -19,14 +15,25 @@ type SignedOutLandingProps = {
 export function SignedOutLanding({
   landingRef,
   heroRef,
-  canAuth,
-  authLoading,
-  status: _status,
-  onLogin,
+  onEmailSubmit,
   showDetails,
   onProceed,
 }: SignedOutLandingProps) {
-  void _status;
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const next = email.trim();
+    const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailPattern.test(next)) {
+      setError("Enter a valid email to continue.");
+      return;
+    }
+    setError(null);
+    onEmailSubmit(next);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-sky-50 via-white to-blue-50 text-slate-900">
       <div ref={landingRef} className="relative overflow-hidden">
@@ -109,24 +116,33 @@ export function SignedOutLanding({
                   Submit Your Employee Information Form
                 </p>
                 
-                {!canAuth ? (
-                  <div className="rounded-xl border border-blue-200 bg-white px-4 py-3 text-sm text-blue-900">
-                    Azure client/tenant env vars are missing. Populate them in
-                    `.env.local` to enable Microsoft login.
+                <form onSubmit={handleSubmit} className="space-y-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <label className="w-full text-left text-xs font-semibold text-slate-600">
+                      <input
+                        className="w-full rounded-full border border-blue-100 bg-white px-4 py-3 text-sm font-semibold text-slate-800 shadow-inner shadow-blue-50 outline-none transition focus:border-blue-400 focus:ring-2 focus:ring-blue-100"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="Enter your email to continue"
+                        required
+                      />
+                    </label>
+                    <button
+                      type="submit"
+                      className="inline-flex w-full sm:w-auto items-center justify-center gap-3 rounded-full bg-gradient-to-r from-blue-600 to-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:scale-[1.01] hover:shadow-xl"
+                    >
+                      Continue with email
+                    </button>
                   </div>
-                ) : (
-                  <button
-                    onClick={onLogin}
-                    disabled={authLoading}
-                    className="inline-flex w-full items-center justify-center gap-3 rounded-full bg-gradient-to-r from-blue-600 to-sky-500 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-blue-200 transition hover:scale-[1.01] hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {authLoading && (
-                      <span className="h-5 w-5 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    )}
-                    Sign in here and Fill Your HTS Credintials
-                  </button>
-                )}
-               
+                  {error ? (
+                    <p className="text-xs font-semibold text-rose-600">{error}</p>
+                  ) : (
+                    <p className="text-xs font-semibold text-blue-700">
+                      Use any email (Gmail/Outlook/etc.). We will send your form to HTS PeopleOps.
+                    </p>
+                  )}
+                </form>
               </div>
             </div>
           </div>

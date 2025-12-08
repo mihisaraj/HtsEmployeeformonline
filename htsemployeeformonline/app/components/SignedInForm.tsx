@@ -1,7 +1,6 @@
 "use client";
 
-import React, { RefObject } from "react";
-import { AccountInfo } from "@azure/msal-browser";
+import { RefObject } from "react";
 import { StatusCallout } from "./StatusCallout";
 import {
   DateOfBirthField,
@@ -29,7 +28,7 @@ type SignedInFormProps = {
   submitting: boolean;
   profileLoading: boolean;
   profile: { name?: string; email?: string };
-  account: AccountInfo;
+  signedInEmail?: string | null;
   dobError?: string;
   relationshipOptions: string[];
   countryOptions: string[];
@@ -52,7 +51,7 @@ export function SignedInForm({
   submitting,
   profileLoading,
   profile,
-  account,
+  signedInEmail,
   dobError,
   relationshipOptions,
   countryOptions,
@@ -60,6 +59,8 @@ export function SignedInForm({
   maritalOptions,
   countryCodes,
 }: SignedInFormProps) {
+  const displayEmail = profile.email ?? signedInEmail ?? "Email not provided";
+
   return (
     <main
       ref={flowRef}
@@ -71,10 +72,10 @@ export function SignedInForm({
             Signed in
           </span>
           <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
-            {profileLoading ? "Loading profile" : profile.name || "HTS employee"}
+            {profileLoading ? "Loading profile" : profile.name || "Employee"}
           </span>
           <span className="rounded-full bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-600">
-            {profile.email ?? account.username}
+            {displayEmail}
           </span>
         </div>
         <div>

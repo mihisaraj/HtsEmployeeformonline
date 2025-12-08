@@ -16,7 +16,7 @@ Blue/white onboarding portal where HTS employees sign in with Microsoft (Azure A
    ```bash
    npm run dev
    ```
-4. Open http://localhost:3000 and sign in with an HTS Microsoft account. Submit the form to trigger the Graph email with the XLSX attachment.
+4. Open http://localhost:3000 and sign in with your Microsoft account. Submit the form to trigger the Graph email with the XLSX attachment.
 
 ## Environment variables
 

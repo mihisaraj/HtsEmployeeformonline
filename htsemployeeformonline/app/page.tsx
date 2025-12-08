@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useState,
-  useRef,
-} from "react";
-import { PublicClientApplication, type AccountInfo } from "@azure/msal-browser";
+import { useEffect, useRef, useState } from "react";
 import { Nominee, NomineeField } from "./types/form";
 import {
   type FieldKey,
@@ -80,22 +74,10 @@ const buildDefaultForm = (): FormState => ({
   nominees: [createNominee()],
 });
 
-const msalClientId = process.env.NEXT_PUBLIC_AZURE_CLIENT_ID;
-const msalTenantId = process.env.NEXT_PUBLIC_AZURE_TENANT_ID;
-const msalRedirectUri =
-  process.env.NEXT_PUBLIC_AZURE_REDIRECT_URI ?? "http://localhost:3000";
-const LOGIN_SCOPES: string[] = ["User.Read", "Mail.Send"];
-const ALLOWED_DOMAIN = "@hts.asia";
-
 export default function Home() {
-  const [msalInstance, setMsalInstance] = useState<
-    PublicClientApplication | undefined
-  >(undefined);
-  const [account, setAccount] = useState<AccountInfo | null>(null);
   const [profile, setProfile] = useState<{ name?: string; email?: string }>(
     {}
   );
-  const [mailToken, setMailToken] = useState<string | null>(null);
   const [formData, setFormData] = useState<FormState>(() => buildDefaultForm());
   const [errors, setErrors] = useState<ValidationErrors>({
     fields: {},
@@ -103,133 +85,17 @@ export default function Home() {
   });
   const [status, setStatus] = useState<StatusState>({
     type: "info",
-    message: "Welcome - sign in with your HTS Microsoft account to begin.",
+    message: "Sign in with your email to continue.",
   });
-  const [authLoading, setAuthLoading] = useState(false);
-  const [profileLoading, setProfileLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const landingRef = useRef<HTMLDivElement | null>(null);
   const flowRef = useRef<HTMLDivElement | null>(null);
   const heroRef = useRef<HTMLDivElement | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [signedInEmail, setSignedInEmail] = useState<string | null>(null);
 
-  const canAuth = Boolean(msalClientId && msalTenantId);
   useSignedOutAnimations(landingRef, heroRef);
   useSignedInAnimations(flowRef);
-
-  const hydrateProfile = useCallback(
-    async (instance: PublicClientApplication, nextAccount: AccountInfo) => {
-      setProfileLoading(true);
-      setProfile({
-        name: nextAccount.name ?? "",
-        email: nextAccount.username ?? "",
-      });
-
-      try {
-        const token = await instance.acquireTokenSilent({
-          account: nextAccount,
-          scopes: ["User.Read"],
-        });
-
-        const res = await fetch("https://graph.microsoft.com/v1.0/me", {
-          headers: { Authorization: `Bearer ${token.accessToken}` },
-        });
-
-        if (res.ok) {
-          const me = await res.json();
-          setProfile({
-            name: me.displayName ?? nextAccount.name ?? "",
-            email:
-              me.mail ?? me.userPrincipalName ?? nextAccount.username ?? "",
-          });
-        }
-      } catch (error) {
-        console.error("Unable to fetch profile", error);
-      } finally {
-        setProfileLoading(false);
-      }
-    },
-    []
-  );
-
-  const acquireMailToken = useCallback(
-    async (
-      instance: PublicClientApplication,
-      nextAccount: AccountInfo
-    ): Promise<boolean> => {
-      try {
-        const token = await instance.acquireTokenSilent({
-          account: nextAccount,
-          scopes: LOGIN_SCOPES,
-        });
-        setMailToken(token.accessToken);
-        return true;
-      } catch (error) {
-        console.error("Unable to fetch Mail.Send token", error);
-        setStatus({
-          type: "error",
-          message:
-            "We could not get permission to send mail. Please re-sign in and accept Mail.Send.",
-        });
-        return false;
-      }
-    },
-    []
-  );
-
-  useEffect(() => {
-    if (!canAuth || typeof window === "undefined") {
-      setAuthChecked(true);
-      return;
-    }
-
-    const instance = new PublicClientApplication({
-      auth: {
-        clientId: msalClientId!,
-        authority: `https://login.microsoftonline.com/${msalTenantId}`,
-        redirectUri: msalRedirectUri,
-      },
-      cache: {
-        cacheLocation: "sessionStorage",
-        storeAuthStateInCookie: false,
-      },
-    });
-
-    const initialize = async () => {
-      await instance.initialize();
-      setMsalInstance(instance);
-
-      const result = await instance.handleRedirectPromise();
-      const activeAccount =
-        result?.account ?? instance.getActiveAccount() ?? null;
-
-      if (activeAccount) {
-        const email = (activeAccount.username ?? "").toLowerCase();
-        if (!email.endsWith(ALLOWED_DOMAIN)) {
-          setStatus({
-            type: "error",
-            message:
-              "Only @hts.asia accounts can sign in here. Please use your HTS address.",
-          });
-          return;
-        }
-
-        instance.setActiveAccount(activeAccount);
-        setAccount(activeAccount);
-        hydrateProfile(instance, activeAccount);
-        const mailOk = await acquireMailToken(instance, activeAccount);
-        setStatus({
-          type: mailOk ? "success" : "error",
-          message: mailOk
-            ? `Signed in as ${activeAccount.username}`
-            : "Signed in, but Mail.Send consent is missing. Please re-sign in and accept Mail.Send.",
-        });
-      }
-    };
-
-    void initialize().finally(() => setAuthChecked(true));
-  }, [acquireMailToken, canAuth, hydrateProfile]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -242,31 +108,15 @@ export default function Home() {
     return () => window.removeEventListener("scroll", onScroll);
   }, [showDetails]);
 
-  const handleLogin = async () => {
-    if (!msalInstance) {
-      setStatus({
-        type: "error",
-        message:
-          "Microsoft sign-in is not ready. Check your Azure client/tenant ID env vars.",
-      });
-      return;
-    }
-
-    setAuthLoading(true);
-    try {
-      await msalInstance.loginRedirect({
-        scopes: LOGIN_SCOPES,
-        prompt: "select_account",
-      });
-    } catch (error) {
-      console.error("Login error", error);
-      setStatus({
-        type: "error",
-        message: "Login failed. Verify your HTS Microsoft credentials.",
-      });
-    } finally {
-      setAuthLoading(false);
-    }
+  const handleEmailSubmit = (email: string) => {
+    const nextEmail = email.trim();
+    setSignedInEmail(nextEmail);
+    setProfile((prev) => ({ ...prev, email: nextEmail }));
+    setStatus({
+      type: "success",
+      message: `Signed in with ${nextEmail}. You can now fill out the form.`,
+    });
+    setShowDetails(true);
   };
 
   const handleFieldChange = (key: FieldKey, value: string) => {
@@ -330,14 +180,6 @@ export default function Home() {
   };
 
   const handleSubmit = async () => {
-    if (!account) {
-      setStatus({
-        type: "error",
-        message: "Please sign in with your HTS Microsoft account first.",
-      });
-      return;
-    }
-
     const validation = validateForm(formData);
     setErrors(validation.errors);
     if (validation.hasErrors) {
@@ -350,45 +192,20 @@ export default function Home() {
       return;
     }
 
+    const senderEmail = profile.email?.trim() || signedInEmail || "";
+    if (!senderEmail) {
+      setStatus({
+        type: "error",
+        message: "Please sign in with your email before submitting.",
+      });
+      return;
+    }
+
     setSubmitting(true);
     setStatus({
       type: "info",
-      message: "Validating and sending securely via Microsoft Graph...",
+      message: "Validating and sending your details via email...",
     });
-
-    const emailToSend = (profile.email || account.username || "").toLowerCase();
-    if (!emailToSend.endsWith(ALLOWED_DOMAIN)) {
-      setSubmitting(false);
-      setStatus({
-        type: "error",
-        message: "Only @hts.asia accounts can submit onboarding packets.",
-      });
-      return;
-    }
-
-    let effectiveToken = mailToken;
-    if (!effectiveToken && msalInstance) {
-      try {
-        const token = await msalInstance.acquireTokenSilent({
-          account: account!,
-          scopes: LOGIN_SCOPES,
-        });
-        effectiveToken = token.accessToken;
-        setMailToken(token.accessToken);
-      } catch (error) {
-        console.error("Mail.Send token error", error);
-      }
-    }
-
-    if (!effectiveToken) {
-      setSubmitting(false);
-      setStatus({
-        type: "error",
-        message:
-          "Unable to send because Mail.Send permission was not granted. Please sign in again.",
-      });
-      return;
-    }
 
     const payload = {
       profile: {
@@ -397,9 +214,8 @@ export default function Home() {
           formData.passportName ||
           formData.callingName ||
           "HTS Employee",
-        email: profile.email || account.username,
+        email: senderEmail,
       },
-      accessToken: effectiveToken,
       form: formData,
     };
 
@@ -419,54 +235,59 @@ export default function Home() {
 
       setStatus({
         type: "success",
-        message:
-          "Information submitted to PeopleOps with the Excel attachment.",
+        message: "Information submitted to PeopleOps. Redirecting to home...",
       });
       setFormData(buildDefaultForm());
       setErrors({ fields: {}, nominees: {} });
+      
+      if (typeof window !== "undefined") {
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      // Wait 3 seconds then return to landing page
+      setTimeout(() => {
+        setSignedInEmail(null);
+        setProfile({});
+        setShowDetails(false);
+        setStatus({
+          type: "info",
+          message: "Sign in with your email to continue.",
+        });
+      }, 3000);
     } catch (error) {
       console.error("Submit error", error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : "Sending failed. Please try again.";
       setStatus({
         type: "error",
-        message:
-          "Sending failed. Confirm your Graph credentials and try again.",
+        message,
       });
     } finally {
       setSubmitting(false);
     }
   };
 
-  if (!authChecked) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-amber-50 via-white to-sky-50 text-slate-900">
-        <div className="flex items-center gap-3 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-700 shadow-md ring-1 ring-amber-100">
-          <span className="h-4 w-4 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
-          Preparing your welcome page...
-        </div>
-      </div>
-    );
-  }
+  const dobError =
+    errors.fields.dobDay || errors.fields.dobMonth || errors.fields.dobYear;
+  const showGlobalError =
+    Boolean(errors.global) &&
+    !(status.type === "error" && status.message === errors.global);
 
-  if (!account) {
+  if (!signedInEmail && !profile.email) {
     return (
       <SignedOutLanding
         landingRef={landingRef}
         heroRef={heroRef}
-        canAuth={canAuth}
-        authLoading={authLoading}
-        status={status}
-        onLogin={handleLogin}
+        onEmailSubmit={handleEmailSubmit}
         showDetails={showDetails}
         onProceed={() => setShowDetails(true)}
       />
     );
   }
 
-  const dobError =
-    errors.fields.dobDay || errors.fields.dobMonth || errors.fields.dobYear;
-  const showGlobalError =
-    Boolean(errors.global) &&
-    !(status.type === "error" && status.message === errors.global);
+  const userEmail = profile.email ?? signedInEmail ?? undefined;
 
   return (
     <div className="min-h-screen bg-[#f4f6fb] text-slate-900">
@@ -482,9 +303,9 @@ export default function Home() {
         onRemoveNominee={removeNominee}
         onSubmit={handleSubmit}
         submitting={submitting}
-        profileLoading={profileLoading}
+        profileLoading={false}
         profile={profile}
-        account={account}
+        signedInEmail={userEmail}
         dobError={dobError}
         relationshipOptions={RELATIONSHIP_OPTIONS}
         countryOptions={HOME_COUNTRY_OPTIONS}
@@ -494,7 +315,6 @@ export default function Home() {
       />
     </div>
   );
-
 }
 
 function validateForm(data: FormState): {
