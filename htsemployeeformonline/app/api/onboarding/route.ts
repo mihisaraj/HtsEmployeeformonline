@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
-import nodemailer from "nodemailer";
+import { sendMailWithGraph } from "@/app/lib/graph";
+import dbConnect from "@/app/lib/db";
+import Employee from "@/app/models/Employee";
 
 export const runtime = "nodejs";
 
@@ -51,12 +53,14 @@ type OnboardingBody = {
 };
 
 // Required environment variables for SMTP
+// Required environment variables for MS Graph
 const requiredEnv = [
-  "SMTP_HOST",
-  "SMTP_PORT",
-  "SMTP_USER",
-  "SMTP_PASS",
-  "SMTP_TO",   // The email address to send TO (PeopleOps)
+  "AZURE_TENANT_ID",
+  "AZURE_CLIENT_ID",
+  "AZURE_CLIENT_SECRET",
+  "MS_SENDER_EMAIL",
+  "SMTP_TO",
+  "MONGODB_URI",
 ];
 
 export async function POST(req: Request) {
@@ -88,13 +92,34 @@ export async function POST(req: Request) {
     const senderDisplayName = body.profile?.name || "HTS Applicant";
     const userEmail = body.profile.email;
 
-    await sendMailWithNodemailer(
-      attachmentBuffer,
+    await sendMailWithGraph(
       subject,
       html,
+      [{ filename: `hts-onboarding-${Date.now()}.xlsx`, content: attachmentBuffer }],
       senderDisplayName,
       userEmail
     );
+
+    // Save to MongoDB
+    await dbConnect();
+    const dob = formatDateOfBirth(body.form || {});
+    const employeeData = {
+      profileName: body.profile?.name,
+      profileEmail: body.profile?.email,
+      ...body.form,
+      dob, // Use constructed DOB
+    };
+
+    // Upsert based on passportNo
+    if (body.form?.passportNo) {
+      await Employee.findOneAndUpdate(
+        { passportNo: body.form.passportNo },
+        employeeData,
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    } else {
+      console.warn("No passport number provided, skipping database save.");
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -105,42 +130,7 @@ export async function POST(req: Request) {
   }
 }
 
-async function sendMailWithNodemailer(
-  attachmentBuffer: Buffer,
-  subject: string,
-  html: string,
-  senderName: string,
-  userEmail: string
-) {
-  const transporter = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port: Number(process.env.SMTP_PORT),
-    secure: Number(process.env.SMTP_PORT) === 465, // true for 465, false for other ports
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  });
 
-  const mailOptions = {
-    // STANDARD SOLUTION: Secure Delivery + Correct Reply
-    // 1. From: "John Doe" <mihisara@hts.asia> (Technical Sender is you, Visual Name is them)
-    // 2. Reply-To: john.doe@gmail.com (Replying goes to them)
-    from: `"${senderName}" <${process.env.SMTP_USER}>`,
-    to: process.env.SMTP_TO,
-    replyTo: userEmail,
-    subject: subject,
-    html: html,
-    attachments: [
-      {
-        filename: `hts-onboarding-${Date.now()}.xlsx`,
-        content: attachmentBuffer,
-      },
-    ],
-  };
-
-  await transporter.sendMail(mailOptions);
-}
 
 function buildWorkbook(payload: OnboardingBody) {
   const form = payload.form ?? {};
