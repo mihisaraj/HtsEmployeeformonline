@@ -10,7 +10,8 @@
     "dev:electron": "wait-on tcp:5173 && tsc -p tsconfig.electron.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json && cross-env NODE_ENV=development electron .",
     "build": "tsc -p tsconfig.electron.json && echo '{\"type\":\"commonjs\"}' > dist-electron/package.json && vite build && electron-builder --mac --win --x64",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "start": "vite --host 0.0.0.0"
   },
   "dependencies": {
     "react": "^19.2.0",
@@ -52,6 +53,13 @@
     },
     "win": {
       "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "HTS Admin"
     },
     "files": [
       "dist/**/*",
